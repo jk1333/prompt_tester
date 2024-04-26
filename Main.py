@@ -114,15 +114,19 @@ def analyze_gemini(contents, model_name, instruction, response_mime):
 
 def download_audio(video):
     file = f"{video.video_id}.mp3"
-    video.streams.get_audio_only().download(".", filename=file)
+    if os.path.exists(file) == False:
+        video.streams.get_audio_only().download(".", filename=file)
     blob = get_bucket().blob(file)
-    blob.upload_from_filename(file)
+    if blob.exists() == False:
+        blob.upload_from_filename(file)
 
 def download_video(video):
     file = f"{video.video_id}.mp4"
-    video.streams.get_highest_resolution().download(".", filename=file)
+    if os.path.exists(file) == False:
+        video.streams.get_highest_resolution().download(".", filename=file)
     blob = get_bucket().blob(file)
-    blob.upload_from_filename(file)
+    if blob.exists() == False:
+        blob.upload_from_filename(file)
 
 def text_block(idx, text):
     st.caption("Text block")
