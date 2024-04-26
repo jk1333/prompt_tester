@@ -11,6 +11,12 @@ BUCKET_ROOT = os.environ['BUCKET_ROOT']
 YT_DATA_API_KEY = os.environ['YT_DATA_API_KEY']
 DEFAULT_YT_VIDEO = os.environ['DEFAULT_YT_VIDEO']
 
+#REGION = "asia-northeast1"
+#PROJECT_ID = "sandbox-373102"
+#BUCKET_ROOT = "jk-content"
+#YT_DATA_API_KEY = "asd"
+#DEFAULT_YT_VIDEO = ""
+
 GENERATIVE_MODEL_V1 = "gemini-1.0-pro-vision-001"
 GENERATIVE_MODEL_V1_TEXT = "gemini-1.0-pro-002"
 GENERATIVE_MODEL_V1_5 = "gemini-1.5-pro-preview-0409"
@@ -114,17 +120,15 @@ def analyze_gemini(contents, model_name, instruction, response_mime):
 
 def download_audio(video):
     file = f"{video.video_id}.mp3"
-    if os.path.exists(file) == False:
-        video.streams.get_audio_only().download(".", filename=file)
-        blob = get_bucket().blob(file)
-        blob.upload_from_filename(file)
+    video.streams.get_audio_only().download(".", filename=file)
+    blob = get_bucket().blob(file)
+    blob.upload_from_filename(file)
 
 def download_video(video):
     file = f"{video.video_id}.mp4"
-    if os.path.exists(file) == False:
-        video.streams.get_highest_resolution().download(".", filename=file)
-        blob = get_bucket().blob(file)
-        blob.upload_from_filename(file)
+    video.streams.get_highest_resolution().download(".", filename=file)
+    blob = get_bucket().blob(file)
+    blob.upload_from_filename(file)
 
 def text_block(idx, text):
     st.caption("Text block")
@@ -163,12 +167,14 @@ def pdf_block(idx):
 def yt_video_block(idx, URL):
     st.caption("YouTube Video block")
     video_url = st.text_input("YouTube Video URL", URL, key=f"block-Text-YTVideo-{idx}")
+    if (video_url == None) or (len(video_url) == 0):
+        return [""]
     video = YouTube(video_url)
     try:
         video.check_availability()
     except VideoUnavailable:
         st.error("Video is unavailable")
-        return ""
+        return [""]
     st.video(video.watch_url)
     with st.spinner("Downloading video..."):
         download_video(video)
@@ -182,12 +188,14 @@ def yt_audio_block(idx, URL):
     st.caption("YouTube Audio block")
     cols = st.columns([2, 1])
     video_url = cols[0].text_input("YouTube Video URL", URL, key=f"block-Text-YTAudio-{idx}")
+    if (video_url == None) or (len(video_url) == 0):
+        return [""]
     video = YouTube(video_url)
     try:
         video.check_availability()
     except VideoUnavailable:
         st.error("Video is unavailable")
-        return ""
+        return [""]
     with st.spinner("Downloading audio..."):
         download_audio(video)
     cols[1].success("Audio Ready")
@@ -200,6 +208,8 @@ def yt_audio_block(idx, URL):
 def yt_comments_block(idx, URL):
     st.caption("Comments by YouTube")
     video_url = st.text_input("YouTube Video URL", URL, key=f"block-Text-YTComments-{idx}")
+    if (video_url == None) or (len(video_url) == 0):
+        return [""]
     if st.button(f"Delete", key=f"block-Text-YTComments-Button-{idx}"):
         st.session_state['containers'].pop(idx)
         st.rerun()
@@ -283,7 +293,7 @@ def gemini_stream_out(responses):
         yield response.text
     yield response.to_dict()['usage_metadata']
 
-col_left, col_right = st.columns([1, 2])
+col_left, col_right = st.columns(2)
 
 CONTENTS = []
 
