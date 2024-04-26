@@ -11,12 +11,6 @@ BUCKET_ROOT = os.environ['BUCKET_ROOT']
 YT_DATA_API_KEY = os.environ['YT_DATA_API_KEY']
 DEFAULT_YT_VIDEO = os.environ['DEFAULT_YT_VIDEO']
 
-#REGION = "asia-northeast1"
-#PROJECT_ID = "sandbox-373102"
-#BUCKET_ROOT = "jk-content"
-#YT_DATA_API_KEY = "asd"
-#DEFAULT_YT_VIDEO = ""
-
 GENERATIVE_MODEL_V1 = "gemini-1.0-pro-vision-001"
 GENERATIVE_MODEL_V1_TEXT = "gemini-1.0-pro-002"
 GENERATIVE_MODEL_V1_5 = "gemini-1.5-pro-preview-0409"
