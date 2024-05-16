@@ -11,9 +11,8 @@ BUCKET_ROOT = os.environ['BUCKET_ROOT']
 YT_DATA_API_KEY = os.environ['YT_DATA_API_KEY']
 DEFAULT_YT_VIDEO = os.environ['DEFAULT_YT_VIDEO']
 
-GENERATIVE_MODEL_V1 = "gemini-1.0-pro-vision-001"
-GENERATIVE_MODEL_V1_TEXT = "gemini-1.0-pro-002"
-GENERATIVE_MODEL_V1_5 = "gemini-1.5-pro-preview-0409"
+GENERATIVE_MODEL_V1_5_PRO = "gemini-1.5-pro-preview-0514"
+GENERATIVE_MODEL_V1_5_FLASH = "gemini-1.5-flash-preview-0514"
 
 if 'containers' not in st.session_state:
     st.session_state['containers'] = []
@@ -84,27 +83,24 @@ def analyze_gemini(contents, model_name, instruction, response_mime):
     def get_model():
         return GenerativeModel(model_name)
         #return GenerativeModel(model_name, system_instruction=instruction)
-    token_length = 8192
-    if model_name == GENERATIVE_MODEL_V1:
-        token_length = 2048
     generation_config={
         "candidate_count": 1,
-        "max_output_tokens": token_length,
+        "max_output_tokens": 8192,
         "temperature": 0,
         "top_p": 0.5,
         "top_k": 1
     }
-    if (model_name == GENERATIVE_MODEL_V1_5) and (response_mime != 'text/plain'):
+    if response_mime != 'text/plain':
         generation_config['response_mime_type'] = response_mime
     responses = get_model().generate_content(
         contents=contents,
         generation_config=generation_config,
         safety_settings={
-            HarmCategory.HARM_CATEGORY_UNSPECIFIED: HarmBlockThreshold.HARM_BLOCK_THRESHOLD_UNSPECIFIED,
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.HARM_BLOCK_THRESHOLD_UNSPECIFIED,
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.HARM_BLOCK_THRESHOLD_UNSPECIFIED,
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.HARM_BLOCK_THRESHOLD_UNSPECIFIED,
-            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.HARM_BLOCK_THRESHOLD_UNSPECIFIED,
+            HarmCategory.HARM_CATEGORY_UNSPECIFIED: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
         },
         stream=True
     )
@@ -128,28 +124,39 @@ def download_video(video):
     if blob.exists() == False:
         blob.upload_from_filename(file)
 
+def upload_multimedia(filename, filetype, size, raw):
+    blob = get_bucket().blob(f"uploads/{filename}")
+    if (blob.exists() == False) or (blob.size != size):
+        blob.upload_from_string(data=raw, content_type=filetype)
+
 def text_block(idx, text):
     st.caption("Text block")
     text = st.text_area("Text", text, key=f"block-Text-{idx}", label_visibility="collapsed")
     if text == None:
         text = ""
-    if st.button(f"Delete", key=f"block-Text-Button-{idx}"):
-        st.session_state['containers'].pop(idx)
-        st.rerun()
     return [text]
 
 def image_block(idx):
     st.caption("Image block")
     images = []
-    cols = st.columns([1, 2])
+    cols = st.columns([2, 3])
     uploaded_files = cols[0].file_uploader("Images to add", ['png', 'jpg'], key=f"block-Image-Uploader-{idx}", accept_multiple_files=True, label_visibility="collapsed")
     for uploaded_file in uploaded_files:
         cols[1].image(uploaded_file.getvalue(), "Source", use_column_width=True)
         images.append(Part.from_data(data=uploaded_file.getvalue(), mime_type=uploaded_file.type))
-    if st.button(f"Delete", key=f"block-Image-Button-{idx}"):
-        st.session_state['containers'].pop(idx)
-        st.rerun()
     return images
+
+def multimedia_block(idx):
+    st.caption("Multimedia block")
+    uploaded_file = st.file_uploader("Multimedia to add", ['mp3', 'mp4'], key=f"block-Multimedia-Uploader-{idx}", accept_multiple_files=False, label_visibility="collapsed")
+    if uploaded_file == None:
+        return [""]
+    if uploaded_file.type == "video/mp4":
+        st.video(uploaded_file.getvalue(), format="video/mp4", loop=True)
+    elif uploaded_file.type == "audio/mp3":
+        st.audio(uploaded_file.getvalue(), format="audio/mp3")
+    upload_multimedia(uploaded_file.name, uploaded_file.type, uploaded_file.size, uploaded_file.getvalue())
+    return [Part.from_uri(uri=f"gs://{BUCKET_ROOT}/uploads/{uploaded_file.name}", mime_type=uploaded_file.type)]
 
 def pdf_block(idx):
     st.caption("PDF block")
@@ -157,9 +164,6 @@ def pdf_block(idx):
     uploaded_files = st.file_uploader("PDFs to add", ['pdf'], key=f"block-PDF-Uploader-{idx}", accept_multiple_files=True, label_visibility="collapsed")
     for uploaded_file in uploaded_files:
         pdfs.append(Part.from_data(data=uploaded_file.getvalue(), mime_type=uploaded_file.type))
-    if st.button(f"Delete", key=f"block-PDF-Button-{idx}"):
-        st.session_state['containers'].pop(idx)
-        st.rerun()
     return pdfs
 
 def yt_video_block(idx, URL):
@@ -177,9 +181,6 @@ def yt_video_block(idx, URL):
     with st.spinner("Downloading video..."):
         download_video(video)
     st.success("Video Ready")
-    if st.button(f"Delete", key=f"block-Text-YTVideo-Button-{idx}"):
-        st.session_state['containers'].pop(idx)
-        st.rerun()
     return [Part.from_uri(uri=f"gs://{BUCKET_ROOT}/{video.video_id}.mp4", mime_type="video/mp4")]
 
 def yt_audio_block(idx, URL):
@@ -197,14 +198,11 @@ def yt_audio_block(idx, URL):
     with st.spinner("Downloading audio..."):
         download_audio(video)
     cols[1].success("Audio Ready")
-    st.audio(f"{video.video_id}.mp3", "audio/mp3")
-    if cols[0].button(f"Delete", key=f"block-Text-YTAudio-Button-{idx}"):
-        st.session_state['containers'].pop(idx)
-        st.rerun()
+    st.audio(f"{video.video_id}.mp3", format="audio/mp3")
     return [Part.from_uri(uri=f"gs://{BUCKET_ROOT}/{video.video_id}.mp3", mime_type="audio/mp3")]
 
 def yt_comments_block(idx, URL):
-    st.caption("Comments by YouTube")
+    st.caption("Comments from YouTube")
     video_url = st.text_input("YouTube Video URL", URL, key=f"block-Text-YTComments-{idx}")
     if (video_url == None) or (len(video_url) == 0):
         return [""]
@@ -236,15 +234,17 @@ def create_input_container(idx, container_type, default_value):
                 result = image_block(idx)
             case "PDF":
                 result = pdf_block(idx)
-            case "YT_Video":
+            case "Multimedia":
+                result = multimedia_block(idx)
+            case "Video from YouTube":
                 if default_value == None:
                     default_value = DEFAULT_YT_VIDEO
                 result = yt_video_block(idx, default_value)
-            case "YT_Audio":
+            case "Audio from YouTube":
                 if default_value == None:
                     default_value = DEFAULT_YT_VIDEO
                 result = yt_audio_block(idx, default_value)
-            case "YT_Comments":
+            case "Comments from YouTube":
                 if default_value == None:
                     default_value = DEFAULT_YT_VIDEO
                 result = yt_comments_block(idx, default_value)
@@ -254,19 +254,13 @@ def create_button_set(idx):
     prompt = None
     with st.container(border=1):
         st.caption("Add prompt block")
-        cols = st.columns(6)
-        if cols[0].button("Text", key=f"btn-Text-{idx}", use_container_width=True):
-            prompt = "Text"
-        if cols[1].button("Image", key=f"btn-Image-{idx}", use_container_width=True):
-            prompt = "Image"
-        if cols[2].button("PDF", key=f"btn-PDF-{idx}", use_container_width=True):
-            prompt = "PDF"
-        if cols[3].button("Audio by YT", key=f"btn-YTAudio-{idx}", use_container_width=True):
-            prompt = "YT_Audio"
-        if cols[4].button("Video by YT", key=f"btn-YTVideo-{idx}", use_container_width=True):
-            prompt = "YT_Video"
-        if cols[5].button("Comments by YT", key=f"btn-YTComments-{idx}", use_container_width=True):
-            prompt = "YT_Comments"
+        col_left, col_right = st.columns([3, 1])
+        option = col_left.selectbox("Add prompt block", 
+                              ("Text", "Image", "PDF", "Multimedia", 
+                               "Audio from YouTube", "Video from YouTube", "Comments from YouTube"), 
+                               label_visibility="collapsed", key=f"select-Prompt-{idx}")
+        if col_right.button("Add", key=f"btn-Add-{idx}", use_container_width=True):
+            prompt = option
     return prompt
 
 #with st.sidebar:
@@ -291,7 +285,7 @@ def gemini_stream_out(responses):
         yield response.text
     yield response.to_dict()['usage_metadata']
 
-col_left, col_right = st.columns(2)
+col_left, col_right = st.columns([1, 2])
 
 CONTENTS = []
 
@@ -305,27 +299,26 @@ with col_left:
         container_type = create_button_set(idx)
         if container_type != None:
             st.session_state['containers'].insert(idx+1, (container_type, None))
-    if st.button("Clear cache"):
-        st.cache_data.clear()
-        st.cache_resource.clear()
 
 with col_right:
-    if len(CONTENTS) > 0:
-        tokens, billable = count_tokens(CONTENTS, GENERATIVE_MODEL_V1_5)
-        st.caption(f"Total tokens: {tokens}, Billable characters: {billable}")
-    instruction = None
-    #instruction = st.text_input("System instruction (Only for Gemini 1.5 and 1.0 Text)", "Answer as concisely as possible and give answer in Korean")
-    col1, col2 = st.columns(2)
-    response_option = col1.selectbox("Response option (Only for Gemini 1.5)", ('text/plain', 'application/json'))
-    col2.download_button("Download sample", data=get_file('images.zip'), file_name="images.zip")
-    col1, col2, col3 = st.columns(3)
-    model_name = None
-    if col1.button("Gemini 1.0 Vision"):
-        model_name = GENERATIVE_MODEL_V1
-    if col2.button("Gemini 1.0 Text"):
-        model_name = GENERATIVE_MODEL_V1_TEXT
-    if col3.button("Gemini 1.5"):
-        model_name = GENERATIVE_MODEL_V1_5    
+    with st.container(border=1):
+        #if len(CONTENTS) > 0:
+        #    tokens, billable = count_tokens(CONTENTS, GENERATIVE_MODEL_V1_5_PRO)
+        #    st.caption(f"Total tokens: {tokens}, Billable characters: {billable}")
+        instruction = None
+        #instruction = st.text_input("System instruction (Only for Gemini 1.5 and 1.0 Text)", "Answer as concisely as possible and give answer in Korean")
+        col1, col2, col3 = st.columns([2, 1, 1])
+        response_option = col1.selectbox("Response option", ('text/plain', 'application/json'), label_visibility="collapsed")
+        col2.download_button("Samples", data=get_file('images.zip'), file_name="images.zip")
+        if col3.button("Clear cache"):
+            st.cache_data.clear()
+            st.cache_resource.clear()
+        col1, col2 = st.columns(2)
+        model_name = None
+        if col1.button("Gemini 1.5 Flash", use_container_width=True):
+            model_name = GENERATIVE_MODEL_V1_5_FLASH
+        if col2.button("Gemini 1.5 Pro", use_container_width=True):
+            model_name = GENERATIVE_MODEL_V1_5_PRO
     if model_name != None:
         result_container = st.container()
         with st.spinner(f"Analyzing {len(CONTENTS)} items using {model_name}"):
