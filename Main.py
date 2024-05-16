@@ -78,14 +78,14 @@ def count_tokens(contents, model_name):
     response = get_model().count_tokens(contents)
     return response.total_tokens, response.total_billable_characters
 
-def analyze_gemini(contents, model_name, instruction, response_mime):
+def analyze_gemini(contents, model_name, instruction, response_mime, token_limit):
     from vertexai.generative_models import GenerativeModel, HarmCategory, HarmBlockThreshold
     def get_model():
         return GenerativeModel(model_name)
         #return GenerativeModel(model_name, system_instruction=instruction)
     generation_config={
         "candidate_count": 1,
-        "max_output_tokens": 8192,
+        "max_output_tokens": token_limit,
         "temperature": 0,
         "top_p": 0.5,
         "top_k": 1
@@ -132,8 +132,8 @@ def upload_multimedia(filename, filetype, size, raw):
 def text_block(idx, text):
     st.caption("Text block")
     text = st.text_area("Text", text, key=f"block-Text-{idx}", label_visibility="collapsed")
-    if text == None:
-        text = ""
+    if (text == None) or (text == ""):
+        text = " "
     return [text]
 
 def image_block(idx):
@@ -307,23 +307,24 @@ with col_right:
         #    st.caption(f"Total tokens: {tokens}, Billable characters: {billable}")
         instruction = None
         #instruction = st.text_input("System instruction (Only for Gemini 1.5 and 1.0 Text)", "Answer as concisely as possible and give answer in Korean")
-        col1, col2, col3 = st.columns([2, 1, 1])
-        response_option = col1.selectbox("Response option", ('text/plain', 'application/json'), label_visibility="collapsed")
-        col2.download_button("Samples", data=get_file('images.zip'), file_name="images.zip")
-        if col3.button("Clear cache"):
+        cols = st.columns(4)
+        response_option = cols[0].selectbox("Response option", ('text/plain', 'application/json'), label_visibility="collapsed")
+        max_tokens = cols[1].text_input("Token limit", 8192, label_visibility="collapsed")
+        cols[2].download_button("Samples", data=get_file('images.zip'), file_name="images.zip", use_container_width=True)
+        if cols[3].button("Clear cache", use_container_width=True):
             st.cache_data.clear()
             st.cache_resource.clear()
-        col1, col2 = st.columns(2)
+        cols = st.columns(2)
         model_name = None
-        if col1.button("Gemini 1.5 Flash", use_container_width=True):
+        if cols[0].button("Gemini 1.5 Flash", use_container_width=True):
             model_name = GENERATIVE_MODEL_V1_5_FLASH
-        if col2.button("Gemini 1.5 Pro", use_container_width=True):
+        if cols[1].button("Gemini 1.5 Pro", use_container_width=True):
             model_name = GENERATIVE_MODEL_V1_5_PRO
     if model_name != None:
         result_container = st.container()
         with st.spinner(f"Analyzing {len(CONTENTS)} items using {model_name}"):
             now = datetime.now()
-            responses = analyze_gemini(CONTENTS, model_name, instruction, response_option)
+            responses = analyze_gemini(CONTENTS, model_name, instruction, response_option, int(max_tokens))
             with st.container(border=1):
                 text = st.write_stream(gemini_stream_out(responses))
             st.session_state['result'] = {}
