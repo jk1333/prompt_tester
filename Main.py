@@ -147,19 +147,19 @@ def image_block(idx):
     return images
 
 def multimedia_block(idx):
-    st.caption("Multimedia block")
-    uploaded_file = st.file_uploader("Multimedia to add", ['mp3', 'mp4'], key=f"block-Multimedia-Uploader-{idx}", accept_multiple_files=False, label_visibility="collapsed")
+    st.caption("Multimedia block (Max 32MB per file on Cloud Run)")
+    uploaded_file = st.file_uploader("Multimedia to add", ['mp3', 'wav', 'flac', 'mp4', 'wmv', 'mov', 'webm'], key=f"block-Multimedia-Uploader-{idx}", accept_multiple_files=False, label_visibility="collapsed")
     if uploaded_file == None:
         return [""]
-    if uploaded_file.type == "video/mp4":
-        st.video(uploaded_file.getvalue(), format="video/mp4", loop=True)
-    elif uploaded_file.type == "audio/mp3":
-        st.audio(uploaded_file.getvalue(), format="audio/mp3")
+    if uploaded_file.type.startswith("video/"):
+        st.video(uploaded_file.getvalue(), format=uploaded_file.type, loop=True)
+    elif uploaded_file.type.startswith("audio/"):
+        st.audio(uploaded_file.getvalue(), format=uploaded_file.type)
     upload_multimedia(uploaded_file.name, uploaded_file.type, uploaded_file.size, uploaded_file.getvalue())
     return [Part.from_uri(uri=f"gs://{BUCKET_ROOT}/uploads/{uploaded_file.name}", mime_type=uploaded_file.type)]
 
 def pdf_block(idx):
-    st.caption("PDF block")
+    st.caption("PDF block (Max 32MB per file on Cloud Run)")
     pdfs = []
     uploaded_files = st.file_uploader("PDFs to add", ['pdf'], key=f"block-PDF-Uploader-{idx}", accept_multiple_files=True, label_visibility="collapsed")
     for uploaded_file in uploaded_files:
@@ -302,9 +302,9 @@ with col_left:
 
 with col_right:
     with st.container(border=1):
-        #if len(CONTENTS) > 0:
-        #    tokens, billable = count_tokens(CONTENTS, GENERATIVE_MODEL_V1_5_PRO)
-        #    st.caption(f"Total tokens: {tokens}, Billable characters: {billable}")
+        if len(CONTENTS) > 0:
+            tokens, billable = count_tokens(CONTENTS, GENERATIVE_MODEL_V1_5_PRO)
+            st.caption(f"Total tokens: {tokens}, Billable characters: {billable}")
         instruction = None
         #instruction = st.text_input("System instruction (Only for Gemini 1.5 and 1.0 Text)", "Answer as concisely as possible and give answer in Korean")
         cols = st.columns(4)
