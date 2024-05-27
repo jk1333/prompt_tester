@@ -11,8 +11,8 @@ BUCKET_ROOT = os.environ['BUCKET_ROOT']
 YT_DATA_API_KEY = os.environ['YT_DATA_API_KEY']
 DEFAULT_YT_VIDEO = os.environ['DEFAULT_YT_VIDEO']
 
-GENERATIVE_MODEL_V1_5_PRO = "gemini-1.5-pro-preview-0514"
-GENERATIVE_MODEL_V1_5_FLASH = "gemini-1.5-flash-preview-0514"
+GENERATIVE_MODEL_V1_5_PRO = "gemini-1.5-pro-001"
+GENERATIVE_MODEL_V1_5_FLASH = "gemini-1.5-flash-001"
 
 if 'containers' not in st.session_state:
     st.session_state['containers'] = []
