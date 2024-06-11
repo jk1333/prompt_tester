@@ -2,7 +2,8 @@ import streamlit as st
 import os
 from pytube import YouTube
 from pytube.exceptions import VideoUnavailable
-from vertexai.generative_models import Part
+from vertexai.preview.generative_models import grounding
+from vertexai.generative_models import Part, Tool
 from datetime import datetime
 
 REGION = os.environ['REGION']
@@ -25,6 +26,8 @@ def get_bucket():
     from google.cloud import storage
     storage_client = storage.Client()
     return storage_client.bucket(BUCKET_ROOT)
+
+tool_google_search = Tool.from_google_search_retrieval(grounding.GoogleSearchRetrieval())
 
 from collections import defaultdict
 import pandas as pd
@@ -78,7 +81,7 @@ def count_tokens(contents, model_name):
     response = get_model().count_tokens(contents)
     return response.total_tokens, response.total_billable_characters
 
-def analyze_gemini(contents, model_name, instruction, response_mime, token_limit):
+def analyze_gemini(contents, model_name, instruction, response_mime, token_limit, bUse_Grounding):
     from vertexai.generative_models import GenerativeModel, HarmCategory, HarmBlockThreshold
     def get_model():
         return GenerativeModel(model_name)
@@ -102,7 +105,8 @@ def analyze_gemini(contents, model_name, instruction, response_mime, token_limit
             HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
             HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
         },
-        stream=True
+        stream=True, 
+        tools=[tool_google_search] if bUse_Grounding else None
     )
 
     return responses
@@ -282,8 +286,11 @@ def get_file(filename):
 
 def gemini_stream_out(responses):
     for response in responses:
-        yield response.text
-    yield response.to_dict()['usage_metadata']
+        try:
+            yield response.text
+        except Exception as e:
+            yield response.to_dict()
+    yield response.usage_metadata
 
 col_left, col_right = st.columns([1, 2])
 
@@ -307,11 +314,12 @@ with col_right:
             st.caption(f"Total tokens: {tokens}, Billable characters: {billable}")
         instruction = None
         #instruction = st.text_input("System instruction (Only for Gemini 1.5 and 1.0 Text)", "Answer as concisely as possible and give answer in Korean")
-        cols = st.columns(4)
+        cols = st.columns(5)
         response_option = cols[0].selectbox("Response option", ('text/plain', 'application/json'), label_visibility="collapsed")
         max_tokens = cols[1].text_input("Token limit", 8192, label_visibility="collapsed")
-        cols[2].download_button("Samples", data=get_file('images.zip'), file_name="images.zip", use_container_width=True)
-        if cols[3].button("Clear cache", use_container_width=True):
+        bUse_Grounding = cols[2].checkbox("Google\nGrounding")
+        cols[3].download_button("Samples", data=get_file('images.zip'), file_name="images.zip", use_container_width=True)
+        if cols[4].button("Clear cache", use_container_width=True):
             st.cache_data.clear()
             st.cache_resource.clear()
         cols = st.columns(2)
@@ -324,7 +332,7 @@ with col_right:
         result_container = st.container()
         with st.spinner(f"Analyzing {len(CONTENTS)} items using {model_name}"):
             now = datetime.now()
-            responses = analyze_gemini(CONTENTS, model_name, instruction, response_option, int(max_tokens))
+            responses = analyze_gemini(CONTENTS, model_name, instruction, response_option, int(max_tokens), bUse_Grounding)
             with st.container(border=1):
                 text = st.write_stream(gemini_stream_out(responses))
             st.session_state['result'] = {}
