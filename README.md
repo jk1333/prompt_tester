@@ -28,16 +28,6 @@ Console 에 들어온 후 우측 상단의 점3개 를 클릭하여 Project sett
 
 **메모장에 Project ID 값을 기록해 둡니다.**
 
-* IAM 수정하기
-
-검색창에 "iam" 을 타이핑 하여 검색되는 IAM & Admin 을 들어옵니다.
-
-Name에 Qwiklabs User Service Account 를 확인 후 우측의 연필 아이콘을 누릅니다.(Edit principal)
-
-+ADD ANOTHER ROLE 을 누른 후 Select a role 을 클릭 후 검색창에 "Service Account User" 를 타이핑 하여 나오는걸 클릭 후 SAVE를 누릅니다.
-
-![image](https://raw.githubusercontent.com/jk1333/handson/main/images/1/iam.png)
-
 * YouTube Data 접근을 위한 키 생성
 
 검색창에 "youtube data api" 를 타이핑 하여 검색되는 YouTube Data API 를 선택합니다.
