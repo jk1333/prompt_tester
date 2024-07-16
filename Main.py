@@ -1,65 +1,10 @@
 import streamlit as st
 import os
-from pytube import YouTube
-from pytube.exceptions import VideoUnavailable
+from pytubefix import YouTube
+from pytubefix.exceptions import VideoUnavailable
 from vertexai.preview.generative_models import grounding
 from vertexai.generative_models import Part, Tool
 from datetime import datetime
-from pytube import cipher
-class CustomCipher(cipher.Cipher):
-    def __init__(self, js: str):
-        from typing import List
-        import re
-        from pytube.exceptions import RegexMatchError
-        self.transform_plan: List[str] = cipher.get_transform_plan(js)
-        var_regex = re.compile(r"^[\w\$_]+[^\w\$_]")
-        var_match = var_regex.search(self.transform_plan[0])
-        if not var_match:
-            raise RegexMatchError(
-                caller="__init__", pattern=var_regex.pattern
-            )
-        var = var_match.group(0)[:-1]
-        self.transform_map = cipher.get_transform_map(js, var)
-        self.js_func_patterns = [
-            r"\w+\.(\w+)\(\w,(\d+)\)",
-            r"\w+\[(\"\w+\")\]\(\w,(\d+)\)"
-        ]
-        self.throttling_plan = cipher.get_throttling_plan(js)
-        self.throttling_array = cipher.get_throttling_function_array(js)
-        self.calculated_n = None
-
-def get_throttling_function_name(js: str) -> str:
-    import re
-    from pytube.exceptions import RegexMatchError
-    function_patterns = [
-        r'a\.[a-zA-Z]\s*&&\s*\([a-z]\s*=\s*a\.get\("n"\)\)\s*&&\s*'
-        r'\([a-z]\s*=\s*([a-zA-Z0-9$]+)(\[\d+\])?\([a-z]\)',
-        r'\([a-z]\s*=\s*([a-zA-Z0-9$]+)(\[\d+\])\([a-z]\)',
-    ]
-    for pattern in function_patterns:
-        regex = re.compile(pattern)
-        function_match = regex.search(js)
-        if function_match:
-            if len(function_match.groups()) == 1:
-                return function_match.group(1)
-            idx = function_match.group(2)
-            if idx:
-                idx = idx.strip("[]")
-                array = re.search(
-                    r'var {nfunc}\s*=\s*(\[.+?\]);'.format(
-                        nfunc=re.escape(function_match.group(1))),
-                    js
-                )
-                if array:
-                    array = array.group(1).strip("[]").split(",")
-                    array = [x.strip() for x in array]
-                    return array[int(idx)]
-
-    raise RegexMatchError(
-        caller="get_throttling_function_name", pattern="multiple"
-    )
-cipher.Cipher = CustomCipher
-cipher.get_throttling_function_name = get_throttling_function_name
 
 REGION = os.environ['REGION']
 PROJECT_ID = os.environ['PROJECT_ID']
