@@ -244,3 +244,23 @@ top4.jpg
 다음의 유투부 커맨트를 긍정, 부정으로 나누어 분류해 주세요. 예시로 각각 5개씩 선정해서 설명해 주세요.
 
 ![image](https://raw.githubusercontent.com/jk1333/handson/main/images/1/geminiprompt테스--3b40c2hbihj.png)
+
+**7. 인급동 목록 분석 (Trends from YT + Text)**
+
+**Trends from YT:**
+
+KR, All
+
+**Text:**
+
+위 내용을 유투브의 실시간 인기 영상 목록입니다. 이를 이용하여 유투브의 트랜드를 분석해 주세요.
+
+![image](https://raw.githubusercontent.com/jk1333/handson/main/images/1/trends.png)
+
+**8. Google Search ground (Google Grounding Checkbox + Text)**
+
+**Text:**
+
+장충 체육관 위치를 알려주세요.
+
+![image](https://raw.githubusercontent.com/jk1333/handson/main/images/1/googleground.png)
