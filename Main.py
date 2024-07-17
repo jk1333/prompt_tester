@@ -15,6 +15,13 @@ DEFAULT_YT_VIDEO = os.environ['DEFAULT_YT_VIDEO']
 GENERATIVE_MODEL_V1_5_PRO = "gemini-1.5-pro-001"
 GENERATIVE_MODEL_V1_5_FLASH = "gemini-1.5-flash-001"
 
+COUNTRIES = ['KR', 'US', 'DE', 'FR', 'GB', 'JP']
+INTERESTS = {
+    'All':'0', 'Film & Animation':'1', 'Autos & Vehicles':'2', 'Music':'10', 'Pets & Animals':'15',
+    'Sports':'17', 'Gaming':'20', 'People & Blogs':'22', 'Entertainment':'24', 'News & Politics':'25',
+    'Howto & Style':'26', 'Science & Technology':'28'
+    }
+
 if 'containers' not in st.session_state:
     st.session_state['containers'] = []
     st.session_state['result'] = None
@@ -73,6 +80,16 @@ def get_video_comments(video_id, max_comments = 30):
         print(e)
         return pd.DataFrame()
     return pd.DataFrame(comments_dic)
+
+def get_most_popular(country_code, category_id = "0", max_videos = 50):
+    youtube = googleapiclient.discovery.build('youtube', 'v3', developerKey = YT_DATA_API_KEY)
+    response = youtube.videos().list(part="snippet,statistics", chart="mostPopular", 
+                                     regionCode=country_code, maxResults=max_videos, videoCategoryId=category_id).execute()
+    videos = response["items"]
+    playlist = ""
+    for video in videos:
+        playlist += f"* 'Channel title': '{video['snippet']['title']}', 'Content title': '{video['snippet']['channelTitle']}'\n"
+    return playlist
 
 def count_tokens(contents, model_name):
     from vertexai.generative_models import GenerativeModel
@@ -210,9 +227,6 @@ def yt_comments_block(idx, URL):
     video_url = st.text_input("YouTube Video URL", URL, key=f"block-Text-YTComments-{idx}")
     if (video_url == None) or (len(video_url) == 0):
         return [""]
-    if st.button(f"Delete", key=f"block-Text-YTComments-Button-{idx}"):
-        st.session_state['containers'].pop(idx)
-        st.rerun()
     video = YouTube(video_url)
     try:
         video.check_availability()
@@ -224,7 +238,16 @@ def yt_comments_block(idx, URL):
     comments = ""
     for comment in comments_df['text'].tolist():
         comments += "* " + comment + "\n"
-    text = st.text_area("Text", comments, key=f"block-Text-YTAudio-STT-{idx}", label_visibility="collapsed")
+    text = st.text_area("Text", comments, key=f"block-Text-YTComments-Result-{idx}", label_visibility="collapsed")
+    return [text]
+
+def yt_trends_block(idx):
+    st.caption("Trends from YouTube")
+    cols = st.columns(2)
+    country = cols[0].selectbox("Countries", COUNTRIES)
+    interests = cols[1].selectbox("Global interests", INTERESTS.keys())
+    playlist = get_most_popular(country, INTERESTS[interests])
+    text = st.text_area("Text", playlist, key=f"block-Text-YTTrends-Result-{idx}", label_visibility="collapsed")
     return [text]
 
 def create_input_container(idx, container_type, default_value):
@@ -252,6 +275,8 @@ def create_input_container(idx, container_type, default_value):
                 if default_value == None:
                     default_value = DEFAULT_YT_VIDEO
                 result = yt_comments_block(idx, default_value)
+            case "Trends from YouTube":
+                result = yt_trends_block(idx)
     return result
 
 def create_button_set(idx):
@@ -261,7 +286,7 @@ def create_button_set(idx):
         col_left, col_right = st.columns([3, 1])
         option = col_left.selectbox("Add prompt block", 
                               ("Text", "Image", "PDF", "Multimedia", 
-                               "Audio from YouTube", "Video from YouTube", "Comments from YouTube"), 
+                               "Audio from YouTube", "Video from YouTube", "Comments from YouTube", "Trends from YouTube"), 
                                label_visibility="collapsed", key=f"select-Prompt-{idx}")
         if col_right.button("Add", key=f"btn-Add-{idx}", use_container_width=True):
             prompt = option
