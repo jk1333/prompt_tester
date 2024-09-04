@@ -157,7 +157,21 @@ CREATE 를 클릭합니다.
 
 * Prompt tester 실행
 
-URL을 실행하고, 좌측 창에서 Text가 선택된 상태로 Add를 누릅니다.
+URL을 실행한 후 우측 상단의 YT Auth 버튼을 클릭합니다.
+
+버튼을 클릭하면 아래와 같이 YouTube 컨텐츠 접근을 위한 인증 링크 및 코드가 나옵니다.
+
+첫번째 버튼을 눌러 별도의 창에서 인증 페이지를 불러온 후 복사해둔 코드를 입력합니다.
+
+나머지 Google account 인증을 진행한 후 완료가 되면 원래의 페이지로 돌아옵니다.
+
+그리고 'Click here...' 버튼을 눌러 인증 과정을 완료합니다.
+
+![image](https://raw.githubusercontent.com/jk1333/handson/main/images/1/yt-auth.png)
+
+인증이 완료되면 우측 상단의 버튼이 Clear cache 로 바뀐것을 확인 후,
+
+좌측 창에서 Text가 선택된 상태로 Add를 누릅니다.
 
 ![image](https://raw.githubusercontent.com/jk1333/handson/main/images/1/geminiprompt테스--bfk8vut9dd.png)
 
