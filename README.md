@@ -78,7 +78,7 @@ Location type에는 Region 을 선택하고 asia-northeast1 (Tokyo) 를 선택�
 
 메뉴에서 "cloud run" 을 검색합니다.
 
-상단의 CREATE SERVICE 를 클릭합니다
+상단의 + DEPLOY CONTAINER -> Service 를 클릭합니다
 
 ![image](https://raw.githubusercontent.com/jk1333/handson/main/images/1/geminiprompt테스--nsoggf7s2w.png)
 
