@@ -1,19 +1,18 @@
 import streamlit as st
 import os
-from pytubefix import YouTube
-from pytubefix.exceptions import VideoUnavailable
 from vertexai.preview.generative_models import grounding
 from vertexai.generative_models import Part, Tool
 from datetime import datetime
+import os.path
 
-REGION = os.environ['REGION']
-PROJECT_ID = os.environ['PROJECT_ID']
 BUCKET_ROOT = os.environ['BUCKET_ROOT']
 YT_DATA_API_KEY = os.environ['YT_DATA_API_KEY']
 DEFAULT_YT_VIDEO = os.environ['DEFAULT_YT_VIDEO']
 
-GENERATIVE_MODEL_V1_5_PRO = "gemini-1.5-pro-001"
-GENERATIVE_MODEL_V1_5_FLASH = "gemini-1.5-flash-001"
+GENERATIVE_MODEL_PRO_EXPERIMENT = "gemini-pro-experimental"
+GENERATIVE_MODEL_FLASH_EXPERIMENT = "gemini-flash-experimental"
+GENERATIVE_MODEL_V1_5_PRO = "gemini-1.5-pro"
+GENERATIVE_MODEL_V1_5_FLASH = "gemini-1.5-flash"
 
 COUNTRIES = ['KR', 'US', 'DE', 'FR', 'GB', 'JP']
 INTERESTS = {
@@ -129,22 +128,6 @@ def analyze_gemini(contents, model_name, instruction, response_mime, token_limit
     return responses
     #return responses.text, responses.to_dict()['usage_metadata']
 
-def download_audio(video):
-    file = f"{video.video_id}.mp3"
-    if os.path.exists(file) == False:
-        video.streams.get_audio_only().download(".", filename=file)
-    blob = get_bucket().blob(file)
-    if blob.exists() == False:
-        blob.upload_from_filename(file)
-
-def download_video(video):
-    file = f"{video.video_id}.mp4"
-    if os.path.exists(file) == False:
-        video.streams.get_highest_resolution().download(".", filename=file)
-    blob = get_bucket().blob(file)
-    if blob.exists() == False:
-        blob.upload_from_filename(file)
-
 def upload_multimedia(filename, filetype, size, raw):
     blob = get_bucket().blob(f"uploads/{filename}")
     if (blob.exists() == False) or (blob.size != size):
@@ -192,48 +175,14 @@ def yt_video_block(idx, URL):
     video_url = st.text_input("YouTube Video URL", URL, key=f"block-Text-YTVideo-{idx}")
     if (video_url == None) or (len(video_url) == 0):
         return [""]
-    video = YouTube(video_url)
-    try:
-        video.check_availability()
-    except VideoUnavailable:
-        st.error("Video is unavailable")
-        return [""]
-    st.video(video.watch_url)
-    with st.spinner("Downloading video..."):
-        download_video(video)
-    st.success("Video Ready")
-    return [Part.from_uri(uri=f"gs://{BUCKET_ROOT}/{video.video_id}.mp4", mime_type="video/mp4")]
-
-def yt_audio_block(idx, URL):
-    st.caption("YouTube Audio block")
-    cols = st.columns([2, 1])
-    video_url = cols[0].text_input("YouTube Video URL", URL, key=f"block-Text-YTAudio-{idx}")
-    if (video_url == None) or (len(video_url) == 0):
-        return [""]
-    video = YouTube(video_url)
-    try:
-        video.check_availability()
-    except VideoUnavailable:
-        st.error("Video is unavailable")
-        return [""]
-    with st.spinner("Downloading audio..."):
-        download_audio(video)
-    cols[1].success("Audio Ready")
-    st.audio(f"{video.video_id}.mp3", format="audio/mp3")
-    return [Part.from_uri(uri=f"gs://{BUCKET_ROOT}/{video.video_id}.mp3", mime_type="audio/mp3")]
+    st.video(video_url)
+    return [Part.from_uri(uri=video_url, mime_type="video/mp4")]
 
 def yt_comments_block(idx, URL):
     st.caption("Comments from YouTube")
     video_url = st.text_input("YouTube Video URL", URL, key=f"block-Text-YTComments-{idx}")
-    if (video_url == None) or (len(video_url) == 0):
-        return [""]
-    video = YouTube(video_url)
-    try:
-        video.check_availability()
-    except VideoUnavailable:
-        st.error("Video is unavailable")
-        return ""
-    comments_df = get_video_comments(video.video_id)
+
+    comments_df = get_video_comments(video_url[video_url.rfind("v=")+2:])
     st.dataframe(comments_df, use_container_width=True, height=200)
     comments = ""
     for comment in comments_df['text'].tolist():
@@ -267,10 +216,6 @@ def create_input_container(idx, container_type, default_value):
                 if default_value == None:
                     default_value = DEFAULT_YT_VIDEO
                 result = yt_video_block(idx, default_value)
-            case "Audio from YouTube":
-                if default_value == None:
-                    default_value = DEFAULT_YT_VIDEO
-                result = yt_audio_block(idx, default_value)
             case "Comments from YouTube":
                 if default_value == None:
                     default_value = DEFAULT_YT_VIDEO
@@ -286,7 +231,7 @@ def create_button_set(idx):
         col_left, col_right = st.columns([3, 1])
         option = col_left.selectbox("Add prompt block", 
                               ("Text", "Image", "PDF", "Multimedia", 
-                               "Audio from YouTube", "Video from YouTube", "Comments from YouTube", "Trends from YouTube"), 
+                               "Video from YouTube", "Comments from YouTube", "Trends from YouTube"), 
                                label_visibility="collapsed", key=f"select-Prompt-{idx}")
         if col_right.button("Add", key=f"btn-Add-{idx}", use_container_width=True):
             prompt = option
@@ -348,12 +293,17 @@ with col_right:
         if cols[4].button("Clear cache", use_container_width=True):
             st.cache_data.clear()
             st.cache_resource.clear()
-        cols = st.columns(2)
+            st.rerun()
+        cols = st.columns(4)
         model_name = None
         if cols[0].button("Gemini 1.5 Flash", use_container_width=True):
             model_name = GENERATIVE_MODEL_V1_5_FLASH
-        if cols[1].button("Gemini 1.5 Pro", use_container_width=True):
+        if cols[1].button("Gemini Flash 🧪", use_container_width=True):
+            model_name = GENERATIVE_MODEL_FLASH_EXPERIMENT
+        if cols[2].button("Gemini 1.5 Pro", use_container_width=True):
             model_name = GENERATIVE_MODEL_V1_5_PRO
+        if cols[3].button("Gemini Pro 🧪", use_container_width=True):
+            model_name = GENERATIVE_MODEL_PRO_EXPERIMENT
     if model_name != None:
         result_container = st.container()
         with st.spinner(f"Analyzing {len(CONTENTS)} items using {model_name}"):

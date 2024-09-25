@@ -20,14 +20,6 @@ Google Cloud 콘솔에서 "vertex ai" 를 타이핑 하면 나오는 AI Studio �
 
 # Task 2. Vertex AI의 Gemini API 로 만든 프롬프트 앱 배포 해보기
 
-* PROJECT_ID 정보 확보하기
-
-Console 에 들어온 후 우측 상단의 점3개 를 클릭하여 Project settings 를 들어갑니다.
-
-![image](https://raw.githubusercontent.com/jk1333/handson/main/images/1/geminiprompt테스--zwzkr4qm90a.png)
-
-**메모장에 Project ID 값을 기록해 둡니다.**
-
 * YouTube Data 접근을 위한 키 생성
 
 검색창에 "youtube data api" 를 타이핑 하여 검색되는 YouTube Data API 를 선택합니다.
@@ -111,15 +103,11 @@ VARIABLES & SECRETS 탭에서 메모장에 기록해둔 값을 아래를 참고�
 <table>
   <thead>
     <tr>
-      <th>REGION</th>
-      <th>asia-northeast1</th>
+      <th>Key</th>
+      <th>Value</th>
     </tr>
   </thead>
   <tbody>
-    <tr>
-      <td>PROJECT_ID</td>
-      <td>메모장에 적어둔값</td>
-    </tr>
     <tr>
       <td>BUCKET_ROOT</td>
       <td>메모장에 적어둔값</td>
@@ -223,9 +211,9 @@ top4.jpg
 
 ![image](https://raw.githubusercontent.com/jk1333/handson/main/images/1/geminiprompt테스--dv98stxpp8i.png)
 
-**4. 음성 요약-외국어 (Audio from YT + Text)**
+**4. 비디오 요약-외국어 (Audio from YT + Text)**
 
-**Audio from YT:**
+**Video from YT:**
 
 [https://www.youtube.com/watch?v=F22D0jCGdLU](https://www.youtube.com/watch?v=F22D0jCGdLU)
 
