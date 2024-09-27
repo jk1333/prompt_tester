@@ -9,10 +9,7 @@ BUCKET_ROOT = os.environ['BUCKET_ROOT']
 YT_DATA_API_KEY = os.environ['YT_DATA_API_KEY']
 DEFAULT_YT_VIDEO = os.environ['DEFAULT_YT_VIDEO']
 
-GENERATIVE_MODEL_PRO_EXPERIMENT = "gemini-pro-experimental"
-GENERATIVE_MODEL_FLASH_EXPERIMENT = "gemini-flash-experimental"
-GENERATIVE_MODEL_V1_5_PRO = "gemini-1.5-pro"
-GENERATIVE_MODEL_V1_5_FLASH = "gemini-1.5-flash"
+MODELS = ["gemini-1.5-pro-002", "gemini-1.5-pro-001", "gemini-1.5-flash-002", "gemini-1.5-flash-001", "gemini-pro-experimental", "gemini-flash-experimental"]
 
 COUNTRIES = ['KR', 'US', 'DE', 'FR', 'GB', 'JP']
 INTERESTS = {
@@ -280,9 +277,6 @@ with col_left:
 
 with col_right:
     with st.container(border=1):
-        if len(CONTENTS) > 0:
-            tokens, billable = count_tokens(CONTENTS, GENERATIVE_MODEL_V1_5_PRO)
-            st.caption(f"Total tokens: {tokens}, Billable characters: {billable}")
         instruction = None
         #instruction = st.text_input("System instruction (Only for Gemini 1.5 and 1.0 Text)", "Answer as concisely as possible and give answer in Korean")
         cols = st.columns(5)
@@ -294,21 +288,16 @@ with col_right:
             st.cache_data.clear()
             st.cache_resource.clear()
             st.rerun()
-        cols = st.columns(4)
-        model_name = None
-        if cols[0].button("Gemini 1.5 Flash", use_container_width=True):
-            model_name = GENERATIVE_MODEL_V1_5_FLASH
-        if cols[1].button("Gemini Flash 🧪", use_container_width=True):
-            model_name = GENERATIVE_MODEL_FLASH_EXPERIMENT
-        if cols[2].button("Gemini 1.5 Pro", use_container_width=True):
-            model_name = GENERATIVE_MODEL_V1_5_PRO
-        if cols[3].button("Gemini Pro 🧪", use_container_width=True):
-            model_name = GENERATIVE_MODEL_PRO_EXPERIMENT
-    if model_name != None:
+        cols = st.columns([3, 1])
+        model = cols[0].selectbox("Model", MODELS, label_visibility="collapsed")
+    if len(CONTENTS) > 0:
+        tokens, billable = count_tokens(CONTENTS, model)
+        st.caption(f"Total tokens: {tokens}, Billable characters: {billable}")
+    if cols[1].button("Execute", use_container_width=True):
         result_container = st.container()
-        with st.spinner(f"Analyzing {len(CONTENTS)} items using {model_name}"):
+        with st.spinner(f"Analyzing {len(CONTENTS)} items using {model}"):
             now = datetime.now()
-            responses = analyze_gemini(CONTENTS, model_name, instruction, response_option, int(max_tokens), bUse_Grounding)
+            responses = analyze_gemini(CONTENTS, model, instruction, response_option, int(max_tokens), bUse_Grounding)
             with st.container(border=1):
                 text = st.write_stream(gemini_stream_out(responses))
             st.session_state['result'] = {}
