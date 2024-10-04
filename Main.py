@@ -9,7 +9,7 @@ BUCKET_ROOT = os.environ['BUCKET_ROOT']
 YT_DATA_API_KEY = os.environ['YT_DATA_API_KEY']
 DEFAULT_YT_VIDEO = os.environ['DEFAULT_YT_VIDEO']
 
-MODELS = ["gemini-1.5-pro-002", "gemini-1.5-pro-001", "gemini-1.5-flash-002", "gemini-1.5-flash-001", "gemini-pro-experimental", "gemini-flash-experimental"]
+MODELS = ["gemini-1.5-pro", "gemini-1.5-pro-002", "gemini-1.5-flash", "gemini-1.5-flash-002", "gemini-pro-experimental", "gemini-flash-experimental"]
 
 COUNTRIES = ['KR', 'US', 'DE', 'FR', 'GB', 'JP']
 INTERESTS = {
@@ -112,11 +112,11 @@ def analyze_gemini(contents, model_name, instruction, response_mime, token_limit
         contents=contents,
         generation_config=generation_config,
         safety_settings={
-            HarmCategory.HARM_CATEGORY_UNSPECIFIED: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_UNSPECIFIED: HarmBlockThreshold.OFF,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.OFF,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.OFF,
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.OFF,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.OFF,
         },
         stream=True, 
         tools=[tool_google_search] if bUse_Grounding else None
@@ -280,7 +280,7 @@ with col_right:
         instruction = None
         #instruction = st.text_input("System instruction (Only for Gemini 1.5 and 1.0 Text)", "Answer as concisely as possible and give answer in Korean")
         cols = st.columns(5)
-        response_option = cols[0].selectbox("Response option", ('text/plain', 'application/json'), label_visibility="collapsed")
+        response_option = cols[0].selectbox("Response option", ('text/plain', 'application/json', 'text/x.enum'), label_visibility="collapsed")
         max_tokens = cols[1].text_input("Token limit", 8192, label_visibility="collapsed")
         bUse_Grounding = cols[2].checkbox("Google\nGrounding")
         cols[3].download_button("Samples", data=get_file('images.zip'), file_name="images.zip", use_container_width=True)
