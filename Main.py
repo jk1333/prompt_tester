@@ -9,7 +9,7 @@ BUCKET_ROOT = os.environ['BUCKET_ROOT']
 YT_DATA_API_KEY = os.environ['YT_DATA_API_KEY']
 DEFAULT_YT_VIDEO = os.environ['DEFAULT_YT_VIDEO']
 
-MODELS = ["gemini-1.5-pro", "gemini-1.5-pro-002", "gemini-1.5-flash", "gemini-1.5-flash-002", "gemini-pro-experimental", "gemini-flash-experimental"]
+MODELS = ["gemini-1.5-pro-002", "gemini-1.5-pro-001", "gemini-1.5-pro", "gemini-1.5-flash-002", "gemini-1.5-flash-001", "gemini-1.5-flash", "gemini-pro-experimental", "gemini-flash-experimental"]
 
 COUNTRIES = ['KR', 'US', 'DE', 'FR', 'GB', 'JP']
 INTERESTS = {
@@ -159,6 +159,12 @@ def multimedia_block(idx):
     upload_multimedia(uploaded_file.name, uploaded_file.type, uploaded_file.size, uploaded_file.getvalue())
     return [Part.from_uri(uri=f"gs://{BUCKET_ROOT}/uploads/{uploaded_file.name}", mime_type=uploaded_file.type)]
 
+def multimedia_uri_block(idx):
+    st.caption("Multimedia uri block")
+    contents_url = st.text_input("Public URL or Google Cloud Storage URL", key=f"block-Multimedia-URI-{idx}")
+    mime_type = st.text_input("Mimetype (ex: video/mp4)", key=f"block-Multimedia-URI-Mimetype-{idx}")
+    return [Part.from_uri(uri=contents_url, mime_type=mime_type)]
+
 def pdf_block(idx):
     st.caption("PDF block (Max 32MB per file on Cloud Run)")
     pdfs = []
@@ -209,6 +215,8 @@ def create_input_container(idx, container_type, default_value):
                 result = pdf_block(idx)
             case "Multimedia":
                 result = multimedia_block(idx)
+            case "Multimedia URL":
+                result = multimedia_uri_block(idx)
             case "Video from YouTube":
                 if default_value == None:
                     default_value = DEFAULT_YT_VIDEO
@@ -227,7 +235,7 @@ def create_button_set(idx):
         st.caption("Add prompt block")
         col_left, col_right = st.columns([3, 1])
         option = col_left.selectbox("Add prompt block", 
-                              ("Text", "Image", "PDF", "Multimedia", 
+                              ("Text", "Image", "PDF", "Multimedia", "Multimedia URL",
                                "Video from YouTube", "Comments from YouTube", "Trends from YouTube"), 
                                label_visibility="collapsed", key=f"select-Prompt-{idx}")
         if col_right.button("Add", key=f"btn-Add-{idx}", use_container_width=True):
