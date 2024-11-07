@@ -1,9 +1,7 @@
 import streamlit as st
-import os
-from vertexai.preview.generative_models import grounding
-from vertexai.generative_models import Part, Tool
+from vertexai.generative_models import Part, Tool, grounding, FinishReason
 from datetime import datetime
-import os.path
+import os
 
 BUCKET_ROOT = os.environ['BUCKET_ROOT']
 YT_DATA_API_KEY = os.environ['YT_DATA_API_KEY']
@@ -22,7 +20,7 @@ if 'containers' not in st.session_state:
     st.session_state['containers'] = []
     st.session_state['result'] = None
 
-st.set_page_config(layout='wide')
+st.set_page_config(layout='wide', page_icon="✨")
 
 @st.cache_resource
 def get_bucket():
@@ -112,18 +110,18 @@ def analyze_gemini(contents, model_name, instruction, response_mime, token_limit
         contents=contents,
         generation_config=generation_config,
         safety_settings={
-            HarmCategory.HARM_CATEGORY_UNSPECIFIED: HarmBlockThreshold.OFF,
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.OFF,
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.OFF,
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.OFF,
-            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.OFF,
+            HarmCategory.HARM_CATEGORY_UNSPECIFIED: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
         },
         stream=True, 
         tools=[tool_google_search] if bUse_Grounding else None
     )
 
     return responses
-    #return responses.text, responses.to_dict()['usage_metadata']
+    #return responses.text, responses.to_dict()["usage_metadata"]
 
 def upload_multimedia(filename, filetype, size, raw):
     blob = get_bucket().blob(f"uploads/{filename}")
@@ -259,13 +257,16 @@ def get_file(filename):
         data = file.read()
     return data
 
+grounding_metadata = None
 def gemini_stream_out(responses):
+    global grounding_metadata
     for response in responses:
         try:
             yield response.text
+            if response.candidates[0].finish_reason != FinishReason.STOP:
+                grounding_metadata = response.candidates[0].grounding_metadata
         except Exception as e:
             yield response.to_dict()
-    
     yield response.usage_metadata
 
 col_left, col_right = st.columns([1, 2])
@@ -308,6 +309,14 @@ with col_right:
             responses = analyze_gemini(CONTENTS, model, instruction, response_option, int(max_tokens), bUse_Grounding)
             with st.container(border=1):
                 text = st.write_stream(gemini_stream_out(responses))
+                st.markdown(grounding_metadata.search_entry_point.rendered_content, unsafe_allow_html=True)
+                if len(grounding_metadata.grounding_supports):
+                    st.markdown(grounding_metadata.grounding_supports, unsafe_allow_html=True)
+                if len(grounding_metadata.grounding_chunks):
+                    st.markdown(grounding_metadata.grounding_chunks, unsafe_allow_html=True)
+                if len(grounding_metadata.retrieval_queries):
+                    st.markdown(grounding_metadata.retrieval_queries, unsafe_allow_html=True)
+                st.markdown(grounding_metadata.retrieval_metadata, unsafe_allow_html=True)
             st.session_state['result'] = {}
             st.session_state['result']['elapsed'] = (datetime.now() - now).seconds
             st.session_state['result']['text'] = text
