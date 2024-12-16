@@ -2,12 +2,13 @@ import streamlit as st
 from vertexai.generative_models import Part, Tool, grounding, FinishReason
 from datetime import datetime
 import os
+from google.cloud import aiplatform
 
 BUCKET_ROOT = os.environ['BUCKET_ROOT']
 YT_DATA_API_KEY = os.environ['YT_DATA_API_KEY']
 DEFAULT_YT_VIDEO = os.environ['DEFAULT_YT_VIDEO']
 
-MODELS = ["gemini-1.5-pro-002", "gemini-1.5-pro-001", "gemini-1.5-pro", "gemini-1.5-flash-002", "gemini-1.5-flash-001", "gemini-1.5-flash", "gemini-pro-experimental", "gemini-flash-experimental"]
+MODELS = ["gemini-1.5-pro-002", "gemini-1.5-pro-001", "gemini-1.5-pro", "gemini-1.5-flash-002", "gemini-1.5-flash-001", "gemini-1.5-flash", "gemini-2.0-flash-exp", "gemini-exp-1206"]
 
 COUNTRIES = ['KR', 'US', 'DE', 'FR', 'GB', 'JP']
 INTERESTS = {
@@ -15,6 +16,8 @@ INTERESTS = {
     'Sports':'17', 'Gaming':'20', 'People & Blogs':'22', 'Entertainment':'24', 'News & Politics':'25',
     'Howto & Style':'26', 'Science & Technology':'28'
     }
+
+DEFAULT_REGION = "europe-west4"
 
 if 'containers' not in st.session_state:
     st.session_state['containers'] = []
@@ -27,8 +30,6 @@ def get_bucket():
     from google.cloud import storage
     storage_client = storage.Client()
     return storage_client.bucket(BUCKET_ROOT)
-
-tool_google_search = Tool.from_google_search_retrieval(grounding.GoogleSearchRetrieval())
 
 from collections import defaultdict
 import pandas as pd
@@ -106,6 +107,9 @@ def analyze_gemini(contents, model_name, instruction, response_mime, token_limit
     }
     if response_mime != 'text/plain':
         generation_config['response_mime_type'] = response_mime
+
+    tool_google_search = Tool.from_google_search_retrieval(grounding.GoogleSearchRetrieval())
+
     responses = get_model().generate_content(
         contents=contents,
         generation_config=generation_config,
@@ -263,7 +267,7 @@ def gemini_stream_out(responses):
     for response in responses:
         try:
             yield response.text
-            if response.candidates[0].finish_reason != FinishReason.STOP:
+            if response.candidates[0].finish_reason == FinishReason.STOP:
                 grounding_metadata = response.candidates[0].grounding_metadata
         except Exception as e:
             yield response.to_dict()
@@ -297,12 +301,14 @@ with col_right:
             st.cache_data.clear()
             st.cache_resource.clear()
             st.rerun()
-        cols = st.columns([3, 1])
+        cols = st.columns([2, 1, 1])
         model = cols[0].selectbox("Model", MODELS, label_visibility="collapsed")
+        DEFAULT_REGION = cols[1].text_input("Region", DEFAULT_REGION, label_visibility="collapsed")
+        aiplatform.init(location=DEFAULT_REGION)
     if len(CONTENTS) > 0:
         tokens, billable = count_tokens(CONTENTS, model)
         st.caption(f"Total tokens: {tokens}, Billable characters: {billable}")
-    if cols[1].button("Execute", use_container_width=True):
+    if cols[2].button("Execute", use_container_width=True):
         result_container = st.container()
         with st.spinner(f"Analyzing {len(CONTENTS)} items using {model}"):
             now = datetime.now()
@@ -310,13 +316,11 @@ with col_right:
             with st.container(border=1):
                 text = st.write_stream(gemini_stream_out(responses))
                 st.markdown(grounding_metadata.search_entry_point.rendered_content, unsafe_allow_html=True)
-                if len(grounding_metadata.grounding_supports):
-                    st.markdown(grounding_metadata.grounding_supports, unsafe_allow_html=True)
-                if len(grounding_metadata.grounding_chunks):
-                    st.markdown(grounding_metadata.grounding_chunks, unsafe_allow_html=True)
-                if len(grounding_metadata.retrieval_queries):
-                    st.markdown(grounding_metadata.retrieval_queries, unsafe_allow_html=True)
-                st.markdown(grounding_metadata.retrieval_metadata, unsafe_allow_html=True)
+                for supports in grounding_metadata.grounding_supports:
+                    with st.container(border=1):
+                        st.markdown(f"{supports.grounding_chunk_indices} {supports.segment.text} {supports.confidence_scores}", unsafe_allow_html=True)
+                for idx, chunk in enumerate(grounding_metadata.grounding_chunks):
+                    st.link_button(f"[{idx}] 🌏 {chunk.web.title}", chunk.web.uri)
             st.session_state['result'] = {}
             st.session_state['result']['elapsed'] = (datetime.now() - now).seconds
             st.session_state['result']['text'] = text
