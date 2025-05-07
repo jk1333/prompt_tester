@@ -1,14 +1,18 @@
 import streamlit as st
-from vertexai.generative_models import Part, Tool, grounding, FinishReason
+from google import genai
+from google.genai import types
 from datetime import datetime
-import os
 from google.cloud import aiplatform
+import os
 
 BUCKET_ROOT = os.environ['BUCKET_ROOT']
 YT_DATA_API_KEY = os.environ['YT_DATA_API_KEY']
 DEFAULT_YT_VIDEO = os.environ['DEFAULT_YT_VIDEO']
 
-MODELS = ["gemini-1.5-pro-002", "gemini-1.5-pro-001", "gemini-1.5-pro", "gemini-1.5-flash-002", "gemini-1.5-flash-001", "gemini-1.5-flash", "gemini-2.0-flash-exp", "gemini-exp-1206"]
+PROJECT_ID = aiplatform.initializer.global_config.project
+DEFAULT_REGION = aiplatform.initializer.global_config.location
+
+MODELS = ["gemini-2.0-flash-001", "gemini-2.0-flash-lite-001", "gemini-2.5-pro-preview-05-06", "gemini-2.5-flash-preview-04-17"]
 
 COUNTRIES = ['KR', 'US', 'DE', 'FR', 'GB', 'JP']
 INTERESTS = {
@@ -16,8 +20,6 @@ INTERESTS = {
     'Sports':'17', 'Gaming':'20', 'People & Blogs':'22', 'Entertainment':'24', 'News & Politics':'25',
     'Howto & Style':'26', 'Science & Technology':'28'
     }
-
-DEFAULT_REGION = "europe-west4"
 
 if 'containers' not in st.session_state:
     st.session_state['containers'] = []
@@ -94,34 +96,40 @@ def count_tokens(contents, model_name):
     return response.total_tokens, response.total_billable_characters
 
 def analyze_gemini(contents, model_name, instruction, response_mime, token_limit, bUse_Grounding):
-    from vertexai.generative_models import GenerativeModel, HarmCategory, HarmBlockThreshold
-    def get_model():
-        return GenerativeModel(model_name)
-        #return GenerativeModel(model_name, system_instruction=instruction)
-    generation_config={
-        "candidate_count": 1,
-        "max_output_tokens": token_limit,
-        "temperature": 0,
-        "top_p": 0.5,
-        "top_k": 1
-    }
+    def get_client():
+        return genai.Client(vertexai=True, location=DEFAULT_REGION, project=PROJECT_ID)
+
+    tools = [types.Tool(google_search=types.GoogleSearch())]
+
+    generate_content_config = types.GenerateContentConfig(
+        temperature = 1,
+        top_p = 0.95,
+        max_output_tokens = token_limit,
+        response_modalities = ["TEXT"],
+        safety_settings = [types.SafetySetting(
+            category="HARM_CATEGORY_HATE_SPEECH",
+            threshold="OFF"
+            ),types.SafetySetting(
+            category="HARM_CATEGORY_DANGEROUS_CONTENT",
+            threshold="OFF"
+            ),types.SafetySetting(
+            category="HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            threshold="OFF"
+            ),types.SafetySetting(
+            category="HARM_CATEGORY_HARASSMENT",
+            threshold="OFF"
+            )
+        ],
+        tools = tools if bUse_Grounding else None,
+    )
+
     if response_mime != 'text/plain':
-        generation_config['response_mime_type'] = response_mime
+        generate_content_config.response_mime_type = response_mime
 
-    tool_google_search = Tool.from_google_search_retrieval(grounding.GoogleSearchRetrieval())
-
-    responses = get_model().generate_content(
+    responses = get_client().models.generate_content_stream(
+        model = model_name,
         contents=contents,
-        generation_config=generation_config,
-        safety_settings={
-            HarmCategory.HARM_CATEGORY_UNSPECIFIED: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-        },
-        stream=True, 
-        tools=[tool_google_search] if bUse_Grounding else None
+        config = generate_content_config
     )
 
     return responses
@@ -145,8 +153,8 @@ def image_block(idx):
     cols = st.columns([2, 3])
     uploaded_files = cols[0].file_uploader("Images to add", ['png', 'jpg'], key=f"block-Image-Uploader-{idx}", accept_multiple_files=True, label_visibility="collapsed")
     for uploaded_file in uploaded_files:
-        cols[1].image(uploaded_file.getvalue(), "Source", use_column_width=True)
-        images.append(Part.from_data(data=uploaded_file.getvalue(), mime_type=uploaded_file.type))
+        cols[1].image(uploaded_file.getvalue(), "Source", use_container_width=True)
+        images.append(types.Part.from_bytes(data=uploaded_file.getvalue(), mime_type=uploaded_file.type))
     return images
 
 def multimedia_block(idx):
@@ -159,20 +167,20 @@ def multimedia_block(idx):
     elif uploaded_file.type.startswith("audio/"):
         st.audio(uploaded_file.getvalue(), format=uploaded_file.type)
     upload_multimedia(uploaded_file.name, uploaded_file.type, uploaded_file.size, uploaded_file.getvalue())
-    return [Part.from_uri(uri=f"gs://{BUCKET_ROOT}/uploads/{uploaded_file.name}", mime_type=uploaded_file.type)]
+    return [types.Part.from_uri(uri=f"gs://{BUCKET_ROOT}/uploads/{uploaded_file.name}", mime_type=uploaded_file.type)]
 
 def multimedia_uri_block(idx):
     st.caption("Multimedia uri block")
     contents_url = st.text_input("Public URL or Google Cloud Storage URL", key=f"block-Multimedia-URI-{idx}")
     mime_type = st.text_input("Mimetype (ex: video/mp4)", key=f"block-Multimedia-URI-Mimetype-{idx}")
-    return [Part.from_uri(uri=contents_url, mime_type=mime_type)]
+    return [types.Part.from_uri(uri=contents_url, mime_type=mime_type)]
 
 def pdf_block(idx):
     st.caption("PDF block (Max 32MB per file on Cloud Run)")
     pdfs = []
     uploaded_files = st.file_uploader("PDFs to add", ['pdf'], key=f"block-PDF-Uploader-{idx}", accept_multiple_files=True, label_visibility="collapsed")
     for uploaded_file in uploaded_files:
-        pdfs.append(Part.from_data(data=uploaded_file.getvalue(), mime_type=uploaded_file.type))
+        pdfs.append(types.Part.from_bytes(data=uploaded_file.getvalue(), mime_type=uploaded_file.type))
     return pdfs
 
 def yt_video_block(idx, URL):
@@ -181,7 +189,7 @@ def yt_video_block(idx, URL):
     if (video_url == None) or (len(video_url) == 0):
         return [""]
     st.video(video_url)
-    return [Part.from_uri(uri=video_url, mime_type="video/mp4")]
+    return [types.Part.from_uri(uri=video_url, mime_type="video/mp4")]
 
 def yt_comments_block(idx, URL):
     st.caption("Comments from YouTube")
@@ -261,17 +269,12 @@ def get_file(filename):
         data = file.read()
     return data
 
-grounding_metadata = None
+metadata = None
 def gemini_stream_out(responses):
-    global grounding_metadata
     for response in responses:
-        try:
-            yield response.text
-            if response.candidates[0].finish_reason == FinishReason.STOP:
-                grounding_metadata = response.candidates[0].grounding_metadata
-        except Exception as e:
-            yield response.to_dict()
-    yield response.usage_metadata
+        yield response.text
+    global metadata
+    metadata = (response.usage_metadata, response.candidates[0].grounding_metadata, response.candidates[0].citation_metadata)
 
 col_left, col_right = st.columns([1, 2])
 
@@ -315,12 +318,19 @@ with col_right:
             responses = analyze_gemini(CONTENTS, model, instruction, response_option, int(max_tokens), bUse_Grounding)
             with st.container(border=1):
                 text = st.write_stream(gemini_stream_out(responses))
-                st.markdown(grounding_metadata.search_entry_point.rendered_content, unsafe_allow_html=True)
-                for supports in grounding_metadata.grounding_supports:
-                    with st.container(border=1):
-                        st.markdown(f"{supports.grounding_chunk_indices} {supports.segment.text} {supports.confidence_scores}", unsafe_allow_html=True)
-                for idx, chunk in enumerate(grounding_metadata.grounding_chunks):
-                    st.link_button(f"[{idx}] 🌏 {chunk.web.title}", chunk.web.uri)
+                st.json(metadata[0])
+                if metadata[1]:
+                    grounding_metadata = metadata[1]
+                    if grounding_metadata.search_entry_point:
+                        st.markdown(grounding_metadata.search_entry_point.rendered_content, unsafe_allow_html=True)
+                    if grounding_metadata.grounding_supports:
+                        for supports in grounding_metadata.grounding_supports:
+                            with st.container(border=1):
+                                st.markdown(f"{supports.grounding_chunk_indices} {supports.segment.text} [{supports.segment.start_index}:{supports.segment.end_index}] ({supports.confidence_scores})", unsafe_allow_html=True)
+                        for idx, chunk in enumerate(grounding_metadata.grounding_chunks):
+                            st.link_button(f"[{idx}] 🌏 {chunk.web.title}", chunk.web.uri)
+                if metadata[2]:
+                    st.json(metadata[2])
             st.session_state['result'] = {}
             st.session_state['result']['elapsed'] = (datetime.now() - now).seconds
             st.session_state['result']['text'] = text

@@ -4,7 +4,7 @@ RUN pip install --upgrade pip
 
 WORKDIR /app
 
-RUN pip install pandas streamlit google-api-python-client google-cloud-aiplatform google-cloud-storage google-cloud-speech
+RUN pip install pandas streamlit google-api-python-client google-cloud-aiplatform google-cloud-storage google-genai
 
 COPY Main.py .
 COPY images.zip .
