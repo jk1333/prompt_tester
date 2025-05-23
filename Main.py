@@ -12,7 +12,7 @@ DEFAULT_YT_VIDEO = os.environ['DEFAULT_YT_VIDEO']
 PROJECT_ID = aiplatform.initializer.global_config.project
 DEFAULT_REGION = aiplatform.initializer.global_config.location
 
-MODELS = ["gemini-2.0-flash-001", "gemini-2.0-flash-lite-001", "gemini-2.5-pro-preview-05-06", "gemini-2.5-flash-preview-04-17"]
+MODELS = ["gemini-2.0-flash-001", "gemini-2.0-flash-lite-001", "gemini-2.5-pro-preview-05-06", "gemini-2.5-flash-preview-05-20"]
 
 COUNTRIES = ['KR', 'US', 'DE', 'FR', 'GB', 'JP']
 INTERESTS = {
@@ -89,17 +89,23 @@ def get_most_popular(country_code, category_id = "0", max_videos = 50):
     return playlist
 
 def count_tokens(contents, model_name):
-    from vertexai.generative_models import GenerativeModel
-    def get_model():
-        return GenerativeModel(model_name)
-    response = get_model().count_tokens(contents)
-    return response.total_tokens, response.total_billable_characters
+    client = genai.Client(vertexai=True, location=DEFAULT_REGION, project=PROJECT_ID)
+    response = client.models.count_tokens(model=model_name, contents=contents)
+    return response.total_tokens, response.cached_content_token_count
 
-def analyze_gemini(contents, model_name, instruction, response_mime, token_limit, bUse_Grounding):
+def analyze_gemini(contents, model_name, instruction, response_mime, token_limit, bUse_Grounding, budget = 0):
     def get_client():
         return genai.Client(vertexai=True, location=DEFAULT_REGION, project=PROJECT_ID)
 
     tools = [types.Tool(google_search=types.GoogleSearch())]
+
+    if model_name.startswith("gemini-2.5-pro"):
+        thinking_config = types.ThinkingConfig(include_thoughts=True)
+    elif model_name.startswith("gemini-2.5-flash"):
+        thinking_config = types.ThinkingConfig(include_thoughts=True,
+                                               thinking_budget=budget)
+    else:
+        thinking_config = None    
 
     generate_content_config = types.GenerateContentConfig(
         temperature = 1,
@@ -121,6 +127,7 @@ def analyze_gemini(contents, model_name, instruction, response_mime, token_limit
             )
         ],
         tools = tools if bUse_Grounding else None,
+        thinking_config = thinking_config
     )
 
     if response_mime != 'text/plain':
@@ -167,13 +174,13 @@ def multimedia_block(idx):
     elif uploaded_file.type.startswith("audio/"):
         st.audio(uploaded_file.getvalue(), format=uploaded_file.type)
     upload_multimedia(uploaded_file.name, uploaded_file.type, uploaded_file.size, uploaded_file.getvalue())
-    return [types.Part.from_uri(uri=f"gs://{BUCKET_ROOT}/uploads/{uploaded_file.name}", mime_type=uploaded_file.type)]
+    return [types.Part.from_uri(file_uri=f"gs://{BUCKET_ROOT}/uploads/{uploaded_file.name}", mime_type=uploaded_file.type)]
 
 def multimedia_uri_block(idx):
     st.caption("Multimedia uri block")
     contents_url = st.text_input("Public URL or Google Cloud Storage URL", key=f"block-Multimedia-URI-{idx}")
     mime_type = st.text_input("Mimetype (ex: video/mp4)", key=f"block-Multimedia-URI-Mimetype-{idx}")
-    return [types.Part.from_uri(uri=contents_url, mime_type=mime_type)]
+    return [types.Part.from_uri(file_uri=contents_url, mime_type=mime_type)]
 
 def pdf_block(idx):
     st.caption("PDF block (Max 32MB per file on Cloud Run)")
@@ -189,7 +196,7 @@ def yt_video_block(idx, URL):
     if (video_url == None) or (len(video_url) == 0):
         return [""]
     st.video(video_url)
-    return [types.Part.from_uri(uri=video_url, mime_type="video/mp4")]
+    return [types.Part.from_uri(file_uri=video_url, mime_type="video/mp4")]
 
 def yt_comments_block(idx, URL):
     st.caption("Comments from YouTube")
@@ -271,10 +278,24 @@ def get_file(filename):
 
 metadata = None
 def gemini_stream_out(responses):
+    thinking = False
     for response in responses:
-        yield response.text
+        for part in response.candidates[0].content.parts:
+            if part and part.thought:
+                if thinking == False:
+                    yield "Thinking steps\n\n"
+                    yield "---\n"
+                    thinking = True
+                yield part.text
+            else:
+                if thinking == True:
+                    thinking = False
+                    yield "---\n"
+                yield response.text
     global metadata
-    metadata = (response.usage_metadata, response.candidates[0].grounding_metadata, response.candidates[0].citation_metadata)
+    metadata = (response.usage_metadata, 
+                response.candidates[0].grounding_metadata, 
+                response.candidates[0].citation_metadata)
 
 col_left, col_right = st.columns([1, 2])
 
@@ -304,18 +325,19 @@ with col_right:
             st.cache_data.clear()
             st.cache_resource.clear()
             st.rerun()
-        cols = st.columns([2, 1, 1])
-        model = cols[0].selectbox("Model", MODELS, label_visibility="collapsed")
-        DEFAULT_REGION = cols[1].text_input("Region", DEFAULT_REGION, label_visibility="collapsed")
+        cols = st.columns([2, 1, 1, 1])
+        model = cols[0].selectbox("Model", MODELS)
+        budget = cols[1].text_input("Budget", 1024)
+        DEFAULT_REGION = cols[2].text_input("Region", DEFAULT_REGION)
         aiplatform.init(location=DEFAULT_REGION)
     if len(CONTENTS) > 0:
-        tokens, billable = count_tokens(CONTENTS, model)
-        st.caption(f"Total tokens: {tokens}, Billable characters: {billable}")
-    if cols[2].button("Execute", use_container_width=True):
+        tokens, cached_tokens = count_tokens(CONTENTS, model)
+        st.caption(f"Total tokens: {tokens}, Cached tokens: {cached_tokens}")
+    if cols[3].button("Execute", use_container_width=True):
         result_container = st.container()
         with st.spinner(f"Analyzing {len(CONTENTS)} items using {model}"):
             now = datetime.now()
-            responses = analyze_gemini(CONTENTS, model, instruction, response_option, int(max_tokens), bUse_Grounding)
+            responses = analyze_gemini(CONTENTS, model, instruction, response_option, int(max_tokens), bUse_Grounding, int(budget))
             with st.container(border=1):
                 text = st.write_stream(gemini_stream_out(responses))
                 st.json(metadata[0])
