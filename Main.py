@@ -5,9 +5,12 @@ from datetime import datetime
 from google.cloud import aiplatform
 import os
 
-BUCKET_ROOT = os.environ['BUCKET_ROOT']
-YT_DATA_API_KEY = os.environ['YT_DATA_API_KEY']
-DEFAULT_YT_VIDEO = os.environ['DEFAULT_YT_VIDEO']
+#BUCKET_ROOT = os.environ['BUCKET_ROOT']
+#YT_DATA_API_KEY = os.environ['YT_DATA_API_KEY']
+#DEFAULT_YT_VIDEO = os.environ['DEFAULT_YT_VIDEO']
+BUCKET_ROOT = ""
+YT_DATA_API_KEY = ""
+DEFAULT_YT_VIDEO = ""
 
 PROJECT_ID = aiplatform.initializer.global_config.project
 DEFAULT_REGION = aiplatform.initializer.global_config.location
@@ -88,24 +91,43 @@ def get_most_popular(country_code, category_id = "0", max_videos = 50):
         playlist += f"* 'Channel title': '{video['snippet']['title']}', 'Content title': '{video['snippet']['channelTitle']}'\n"
     return playlist
 
-def count_tokens(contents, model_name):
-    client = genai.Client(vertexai=True, location=DEFAULT_REGION, project=PROJECT_ID)
+def count_tokens(contents, model_name, region):
+    client = genai.Client(vertexai=True, location=region, project=PROJECT_ID)
     response = client.models.count_tokens(model=model_name, contents=contents)
     return response.total_tokens, response.cached_content_token_count
 
-def analyze_gemini(contents, model_name, instruction, response_mime, token_limit, bUse_Grounding, budget = 0):
+def get_default_model_config(model_name):
+    if model_name.startswith("gemini-2.5-pro"):
+        include_thoughts=True
+        region = "us-central1"
+        token_limit = 65535
+        budget = -1
+    elif model_name.startswith("gemini-2.5-flash"):
+        include_thoughts=True
+        region = "us-central1"
+        token_limit = 65535
+        budget = 1024
+    else:
+        include_thoughts = None
+        region = "us-west1"
+        token_limit = 8192
+        budget = -1
+    return {"thoughts": include_thoughts, "region": region, "token_limit": token_limit, "budget": budget}
+
+
+def analyze_gemini(contents, model_name, region, instruction, response_mime, token_limit, bUse_Grounding, budget = 0):
     def get_client():
-        return genai.Client(vertexai=True, location=DEFAULT_REGION, project=PROJECT_ID)
+        return genai.Client(vertexai=True, location=region, project=PROJECT_ID)
 
     tools = [types.Tool(google_search=types.GoogleSearch())]
 
     if model_name.startswith("gemini-2.5-pro"):
         thinking_config = types.ThinkingConfig(include_thoughts=True)
     elif model_name.startswith("gemini-2.5-flash"):
-        thinking_config = types.ThinkingConfig(include_thoughts=True,
+        thinking_config = types.ThinkingConfig(include_thoughts=budget > 0,
                                                thinking_budget=budget)
     else:
-        thinking_config = None    
+        thinking_config = None
 
     generate_content_config = types.GenerateContentConfig(
         temperature = 1,
@@ -314,30 +336,27 @@ with col_left:
 
 with col_right:
     with st.container(border=1):
-        instruction = None
-        #instruction = st.text_input("System instruction (Only for Gemini 1.5 and 1.0 Text)", "Answer as concisely as possible and give answer in Korean")
-        cols = st.columns(5)
-        response_option = cols[0].selectbox("Response option", ('text/plain', 'application/json', 'text/x.enum'), label_visibility="collapsed")
-        max_tokens = cols[1].text_input("Token limit", 8192, label_visibility="collapsed")
-        bUse_Grounding = cols[2].checkbox("Google\nGrounding")
-        cols[3].download_button("Samples", data=get_file('images.zip'), file_name="images.zip", use_container_width=True)
-        if cols[4].button("Clear cache", use_container_width=True):
-            st.cache_data.clear()
-            st.cache_resource.clear()
-            st.rerun()
         cols = st.columns([2, 1, 1, 1])
         model = cols[0].selectbox("Model", MODELS)
-        budget = cols[1].text_input("Budget", 1024)
-        DEFAULT_REGION = cols[2].text_input("Region", DEFAULT_REGION)
-        aiplatform.init(location=DEFAULT_REGION)
+        config = get_default_model_config(model)
+        budget = cols[1].text_input("Thinking budget", config["budget"], disabled=config["budget"] == -1)
+        region = cols[2].text_input("Region", config["region"])
+        cols[3].download_button("Download\nSamples", data=get_file('images.zip'), file_name="images.zip", use_container_width=True)
+        #instruction = st.text_input("System instruction (Only for Gemini 1.5 and 1.0 Text)", "Answer as concisely as possible and give answer in Korean")
+        cols = st.columns(4)
+        response_option = cols[0].selectbox("Response option", ('text/plain', 'application/json', 'text/x.enum'), label_visibility="collapsed")
+        max_tokens = cols[1].text_input("Token limit", config["token_limit"], label_visibility="collapsed")
+        bUse_Grounding = cols[2].checkbox("Google Grounding")
+        
+        aiplatform.init(location=region)
     if len(CONTENTS) > 0:
-        tokens, cached_tokens = count_tokens(CONTENTS, model)
+        tokens, cached_tokens = count_tokens(CONTENTS, model, region)
         st.caption(f"Total tokens: {tokens}, Cached tokens: {cached_tokens}")
     if cols[3].button("Execute", use_container_width=True):
         result_container = st.container()
         with st.spinner(f"Analyzing {len(CONTENTS)} items using {model}"):
             now = datetime.now()
-            responses = analyze_gemini(CONTENTS, model, instruction, response_option, int(max_tokens), bUse_Grounding, int(budget))
+            responses = analyze_gemini(CONTENTS, model, region, None, response_option, int(max_tokens), bUse_Grounding, int(budget))
             with st.container(border=1):
                 text = st.write_stream(gemini_stream_out(responses))
                 st.json(metadata[0])
