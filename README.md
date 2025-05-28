@@ -252,3 +252,9 @@ KR, All
 장충 체육관 위치를 알려주세요.
 
 ![image](https://raw.githubusercontent.com/jk1333/handson/main/images/1/googleground.png)
+
+**9. Thinking (Model: Gemini 2.5 + Text)**
+
+**Text:**
+
+x^2 -4x + 4 = 0 의 해를 구해주세요.
