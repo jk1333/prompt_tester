@@ -258,3 +258,5 @@ KR, All
 **Text:**
 
 x^2 -4x + 4 = 0 의 해를 구해주세요.
+
+![image](https://raw.githubusercontent.com/jk1333/handson/main/images/1/thinking.png)
