@@ -152,7 +152,8 @@ def analyze_gemini(contents, model_name, region, instruction, response_mime, tok
         ],
         tools = tools if bUse_Grounding else None,
         thinking_config = thinking_config,
-        media_resolution = media_resolution
+        media_resolution = media_resolution,
+        system_instruction = instruction
     )
 
     if response_mime != 'text/plain':
@@ -327,6 +328,7 @@ col_left, col_right = st.columns([1, 2])
 CONTENTS = []
 
 with col_left:
+    instruction = st.text_area("System instruction")
     container_type = create_button_set(-1)
     if container_type != None:
         st.session_state['containers'].insert(0, (container_type, None))
@@ -360,7 +362,7 @@ with col_right:
         result_container = st.container()
         with st.spinner(f"Analyzing {len(CONTENTS)} items using {model}"):
             start_time = time.time()
-            responses = analyze_gemini(CONTENTS, model, region, None, response_option, int(max_tokens), bUse_Grounding, budget, media_resolution)
+            responses = analyze_gemini(CONTENTS, model, region, instruction if len(instruction) > 0 else None, response_option, int(max_tokens), bUse_Grounding, budget, media_resolution)
             with st.container(border=1):
                 text = st.write_stream(gemini_stream_out(responses))
                 elapsed_time = time.time() - start_time
