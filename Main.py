@@ -12,7 +12,7 @@ DEFAULT_YT_VIDEO = os.environ['DEFAULT_YT_VIDEO']
 PROJECT_ID = aiplatform.initializer.global_config.project
 DEFAULT_REGION = aiplatform.initializer.global_config.location
 
-MODELS = ["gemini-2.0-flash-001", "gemini-2.0-flash-lite-001", "gemini-2.5-pro-preview-05-06", "gemini-2.5-flash-preview-05-20"]
+MODELS = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash-001", "gemini-2.0-flash-lite-001"]
 MEDIA_RESOLUTION = [None, "MEDIA_RESOLUTION_UNSPECIFIED", "MEDIA_RESOLUTION_LOW", "MEDIA_RESOLUTION_MEDIUM", "MEDIA_RESOLUTION_HIGH"]
 
 COUNTRIES = ['KR', 'US', 'DE', 'FR', 'GB', 'JP']
@@ -100,14 +100,9 @@ def count_tokens(contents, model_name, region, media_resolution):
     return response.total_tokens, response.cached_content_token_count
 
 def get_default_model_config(model_name):
-    if model_name.startswith("gemini-2.5-pro"):
+    if model_name.startswith("gemini-2.5"):
         include_thoughts=True
-        region = "us-central1"
-        token_limit = 65535
-        budget = "auto"
-    elif model_name.startswith("gemini-2.5-flash"):
-        include_thoughts=True
-        region = "us-central1"
+        region = "us-west1"
         token_limit = 65535
         budget = "auto"
     else:
