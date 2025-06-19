@@ -12,7 +12,7 @@ DEFAULT_YT_VIDEO = os.environ['DEFAULT_YT_VIDEO']
 PROJECT_ID = aiplatform.initializer.global_config.project
 DEFAULT_REGION = aiplatform.initializer.global_config.location
 
-MODELS = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash-001", "gemini-2.0-flash-lite-001"]
+MODELS = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite-preview-06-17", "gemini-2.0-flash-001", "gemini-2.0-flash-lite-001"]
 MEDIA_RESOLUTION = [None, "MEDIA_RESOLUTION_UNSPECIFIED", "MEDIA_RESOLUTION_LOW", "MEDIA_RESOLUTION_MEDIUM", "MEDIA_RESOLUTION_HIGH"]
 
 COUNTRIES = ['KR', 'US', 'DE', 'FR', 'GB', 'JP']
@@ -100,29 +100,30 @@ def count_tokens(contents, model_name, region, media_resolution):
     return response.total_tokens, response.cached_content_token_count
 
 def get_default_model_config(model_name):
+    include_thoughts = None
+    region = "us-west1"
+    token_limit = 8192
+    budget = 0
+    
     if model_name.startswith("gemini-2.5"):
         include_thoughts=True
-        region = "us-west1"
         token_limit = 65535
-        budget = "auto"
-    else:
-        include_thoughts = None
-        region = "us-west1"
-        token_limit = 8192
-        budget = 0
+        budget = -1
+    
+    if "preview" in model_name:
+        region = "global"
+        
     return {"thoughts": include_thoughts, "region": region, "token_limit": token_limit, "budget": budget}
 
-def analyze_gemini(contents, model_name, region, instruction, response_mime, token_limit, bUse_Grounding, budget = "auto", media_resolution = None):
+def analyze_gemini(contents, model_name, region, instruction, response_mime, token_limit, bUse_Grounding, budget = -1, media_resolution = None):
     def get_client():
         return genai.Client(vertexai=True, location=region, project=PROJECT_ID)
 
     tools = [types.Tool(google_search=types.GoogleSearch())]
 
-    if model_name.startswith("gemini-2.5-pro"):
-        thinking_config = types.ThinkingConfig(include_thoughts=True if budget != "0" else False)
-    elif model_name.startswith("gemini-2.5-flash"):
-        thinking_config = types.ThinkingConfig(include_thoughts=True if budget != "0" else False,
-                                               thinking_budget=None if budget in ["auto", "0"] else int(budget))
+    if model_name.startswith("gemini-2.5"):
+        thinking_config = types.ThinkingConfig(include_thoughts=False if budget == 0 else True,
+                                               thinking_budget=None if budget == 0 else int(budget))
     else:
         thinking_config = None
 
@@ -357,7 +358,7 @@ with col_right:
         result_container = st.container()
         with st.spinner(f"Analyzing {len(CONTENTS)} items using {model}"):
             start_time = time.time()
-            responses = analyze_gemini(CONTENTS, model, region, instruction if len(instruction) > 0 else None, response_option, int(max_tokens), bUse_Grounding, budget, media_resolution)
+            responses = analyze_gemini(CONTENTS, model, region, instruction if len(instruction) > 0 else None, response_option, int(max_tokens), bUse_Grounding, int(budget), media_resolution)
             with st.container(border=1):
                 text = st.write_stream(gemini_stream_out(responses))
                 elapsed_time = time.time() - start_time
